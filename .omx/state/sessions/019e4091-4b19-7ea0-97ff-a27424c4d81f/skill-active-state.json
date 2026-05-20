@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "active": true,
+  "skill": "autopilot",
+  "keyword": "$autopilot",
+  "phase": "ralplan",
+  "activated_at": "2026-05-19T14:09:11.782Z",
+  "updated_at": "2026-05-19T14:09:11.782Z",
+  "source": "keyword-detector",
+  "session_id": "019e4091-4b19-7ea0-97ff-a27424c4d81f",
+  "thread_id": "",
+  "turn_id": "019e4091-b54e-7fe0-b090-f870de73176d",
+  "active_skills": [
+    {
+      "skill": "autopilot",
+      "phase": "ralplan",
+      "active": true,
+      "activated_at": "2026-05-19T14:09:11.782Z",
+      "updated_at": "2026-05-19T14:09:11.782Z",
+      "session_id": "019e4091-4b19-7ea0-97ff-a27424c4d81f",
+      "thread_id": "",
+      "turn_id": "019e4091-b54e-7fe0-b090-f870de73176d"
+    }
+  ],
+  "initialized_mode": "autopilot",
+  "initialized_state_path": ".omx/state/sessions/019e4091-4b19-7ea0-97ff-a27424c4d81f/autopilot-state.json"
+}
