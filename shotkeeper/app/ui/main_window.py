@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -22,9 +23,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.analysis import analyze_images
+from app.core.apple_photos import ApplePhotosIntegrationError, cache_selected_photo_assets, next_cache_destination
 from app.core.file_ops import export_photos, set_classification
 from app.core.recommendation import best_photo_explanation, compare_with_best, recommendation_status
 from app.models.photo import Classification, Photo, PhotoGroup
+from app.ui.apple_photos_dialog import ApplePhotosPickerDialog
 from app.ui.components import (
     CLASSIFICATION_LABELS,
     BestComparisonPanel,
@@ -33,6 +36,23 @@ from app.ui.components import (
     PhotoList,
     ThumbnailLabel,
 )
+
+
+class ApplePhotosCacheWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, destination: Path, asset_ids: list[str]) -> None:
+        super().__init__()
+        self.destination = destination
+        self.asset_ids = asset_ids
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            self.finished.emit(cache_selected_photo_assets(self.asset_ids, self.destination))
+        except ApplePhotosIntegrationError as exc:
+            self.failed.emit(str(exc))
 
 
 class MainWindow(QMainWindow):
@@ -45,6 +65,8 @@ class MainWindow(QMainWindow):
         self.groups: list[PhotoGroup] = []
         self.current_group: PhotoGroup | None = None
         self.current_photo: Photo | None = None
+        self.apple_photos_thread: QThread | None = None
+        self.apple_photos_worker: ApplePhotosCacheWorker | None = None
 
         self.group_list = GroupList()
         self.photo_list = PhotoList()
@@ -86,16 +108,19 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
 
         select_button = QPushButton("폴더 선택")
+        apple_photos_button = QPushButton("Apple 사진첩 열기")
         analyze_button = QPushButton("분석")
         copy_button = QPushButton("결과 복사")
         move_button = QPushButton("결과 폴더로 이동")
         toolbar.addWidget(select_button)
+        toolbar.addWidget(apple_photos_button)
         toolbar.addWidget(analyze_button)
         toolbar.addSeparator()
         toolbar.addWidget(copy_button)
         toolbar.addWidget(move_button)
 
         self.select_button = select_button
+        self.apple_photos_button = apple_photos_button
         self.analyze_button = analyze_button
         self.copy_button = copy_button
         self.move_button = move_button
@@ -149,6 +174,7 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         self.select_button.clicked.connect(self.select_folder)
+        self.apple_photos_button.clicked.connect(self.open_apple_photos_picker)
         self.analyze_button.clicked.connect(self.analyze_folder)
         self.copy_button.clicked.connect(lambda: self.export_results("copy"))
         self.move_button.clicked.connect(lambda: self.export_results("move"))
@@ -163,6 +189,52 @@ class MainWindow(QMainWindow):
         if folder:
             self.source_folder = Path(folder)
             self.statusBar().showMessage(f"선택한 폴더: {self.source_folder}")
+
+    def open_apple_photos_picker(self) -> None:
+        dialog = ApplePhotosPickerDialog(parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.analyze_selected_apple_photos(dialog.selected_asset_ids())
+
+    def analyze_selected_apple_photos(self, asset_ids: list[str]) -> None:
+        destination = next_cache_destination()
+        self.apple_photos_button.setEnabled(False)
+        self.statusBar().showMessage(f"선택한 Apple 사진 {len(asset_ids)}장을 분석 캐시로 준비하는 중...")
+
+        thread = QThread(self)
+        worker = ApplePhotosCacheWorker(destination, asset_ids)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self.on_apple_photos_selection_cached)
+        worker.failed.connect(self.on_apple_photos_library_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._clear_apple_photos_worker)
+        self.apple_photos_thread = thread
+        self.apple_photos_worker = worker
+        thread.start()
+
+    @Slot(object)
+    def on_apple_photos_selection_cached(self, result) -> None:  # noqa: ANN001 - Qt signal payload
+        self.source_folder = result.destination
+        self.apple_photos_button.setEnabled(True)
+        self.statusBar().showMessage(
+            f"선택한 Apple 사진 {result.exported_count}장을 캐시했습니다. 분석을 시작합니다..."
+        )
+        self.analyze_folder()
+
+    @Slot(str)
+    def on_apple_photos_library_failed(self, message: str) -> None:
+        self.apple_photos_button.setEnabled(True)
+        QMessageBox.warning(self, "Apple 사진첩 연동 실패", message)
+        self.statusBar().showMessage("Apple 사진첩 연동 실패")
+
+    def _clear_apple_photos_worker(self) -> None:
+        self.apple_photos_thread = None
+        self.apple_photos_worker = None
 
     def analyze_folder(self) -> None:
         if self.source_folder is None:
