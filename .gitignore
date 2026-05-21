@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Local IDE/project metadata
+.idea/
+*.iml
+
+# OMX/Codex runtime artifacts
+.omx/
+
+# Python local/runtime artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ShotKeeper generated output
+ShotKeeper_Result/
+shotkeeper/ShotKeeper_Result/
+
+# Local screenshots and ad-hoc captures
+*.png
+*.mov
+*.mp4
+
+# Local/private sample photos
+shotkeeper/Assets/

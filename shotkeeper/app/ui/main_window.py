@@ -23,9 +23,16 @@ from PySide6.QtWidgets import (
 
 from app.core.analysis import analyze_images
 from app.core.file_ops import export_photos, set_classification
-from app.core.recommendation import best_photo_explanation, recommendation_status
+from app.core.recommendation import best_photo_explanation, compare_with_best, recommendation_status
 from app.models.photo import Classification, Photo, PhotoGroup
-from app.ui.components import CLASSIFICATION_LABELS, GroupList, MetricsBarPanel, PhotoList, ThumbnailLabel
+from app.ui.components import (
+    CLASSIFICATION_LABELS,
+    BestComparisonPanel,
+    GroupList,
+    MetricsBarPanel,
+    PhotoList,
+    ThumbnailLabel,
+)
 
 
 class MainWindow(QMainWindow):
@@ -51,6 +58,7 @@ class MainWindow(QMainWindow):
         self.detail_label = QLabel("그룹과 사진을 선택하세요.")
         self.detail_label.setWordWrap(True)
         self.detail_label.setStyleSheet("padding: 8px; color: #374151;")
+        self.comparison_panel = BestComparisonPanel()
         self.metrics_panel = MetricsBarPanel()
         self.explanation_label = QLabel("추천 사진과 현재 사진의 차이를 여기에서 설명합니다.")
         self.explanation_label.setWordWrap(True)
@@ -103,6 +111,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.summary_label)
         right_layout.addWidget(self.thumbnail)
         right_layout.addWidget(self.detail_label)
+        right_layout.addWidget(self.comparison_panel)
         metrics_scroll = QScrollArea()
         metrics_scroll.setWidgetResizable(True)
         metrics_scroll.setMinimumHeight(210)
@@ -197,6 +206,7 @@ class MainWindow(QMainWindow):
         if photo is None:
             self.set_summary("사진을 선택하면 추천 판단을 보여줍니다.")
             self.detail_label.setText("그룹과 사진을 선택하세요.")
+            self.comparison_panel.set_comparison(None, None, [])
             self.metrics_panel.set_photo(None)
             self.explanation_label.setText("추천 사진과 현재 사진의 차이를 여기에서 설명합니다.")
             self.advanced_label.setText("")
@@ -214,6 +224,12 @@ class MainWindow(QMainWindow):
             f"{self.current_photo.filename}\n"
             f"종합 {self.current_photo.metrics.overall:.1f}/10 · "
             f"현재 분류 {CLASSIFICATION_LABELS[self.current_photo.classification]}"
+        )
+        best_photo = self.current_group.best_photo if self.current_group is not None else None
+        self.comparison_panel.set_comparison(
+            self.current_photo,
+            best_photo,
+            compare_with_best(self.current_group, self.current_photo),
         )
         self.metrics_panel.set_photo(self.current_photo)
         if self.current_group is not None:
