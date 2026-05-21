@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.models.photo import Photo, PhotoGroup
 
 
@@ -14,6 +16,15 @@ METRIC_LABELS = {
     "composition": "구도",
     "color": "색감",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class MetricComparison:
+    key: str
+    label: str
+    selected_score: float
+    best_score: float
+    delta: float
 
 
 def overall_rank(group: PhotoGroup, photo: Photo) -> int | None:
@@ -76,3 +87,21 @@ def recommendation_status(group: PhotoGroup | None, photo: Photo | None) -> tupl
             f"현재 사진은 {photo.metrics.overall:.1f}/10점, 그룹 {rank}위이며 {strongest_gaps} 차이가 납니다."
         ),
     )
+
+
+def compare_with_best(group: PhotoGroup | None, photo: Photo | None) -> list[MetricComparison]:
+    """Compare the selected photo against the group's best photo by metric."""
+    if group is None or photo is None or group.best_photo is None:
+        return []
+
+    best = group.best_photo
+    return [
+        MetricComparison(
+            key=metric,
+            label=METRIC_LABELS[metric],
+            selected_score=getattr(photo.metrics, metric),
+            best_score=getattr(best.metrics, metric),
+            delta=round(getattr(photo.metrics, metric) - getattr(best.metrics, metric), 1),
+        )
+        for metric in METRIC_PRIORITY
+    ]

@@ -4,8 +4,19 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWidgets import QLabel, QListWidget, QListWidgetItem, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
+from app.core.recommendation import MetricComparison
 from app.models.photo import Photo, PhotoGroup
 
 CLASSIFICATION_LABELS = {
@@ -114,6 +125,84 @@ class MetricsBarPanel(QWidget):
                 widget.deleteLater()
 
 
+class BestComparisonPanel(QFrame):
+    """Side-by-side comparison between the selected photo and the recommended best shot."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setStyleSheet("QFrame { border: 1px solid #d8dde6; border-radius: 8px; background: #ffffff; }")
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(12, 10, 12, 10)
+        self.layout.setSpacing(8)
+
+        self.title = QLabel("베스트샷 비교")
+        self.title.setStyleSheet("font-weight: 700; border: none;")
+        self.layout.addWidget(self.title)
+
+        self.summary = QLabel("사진을 선택하면 추천 사진과 현재 사진을 비교합니다.")
+        self.summary.setWordWrap(True)
+        self.summary.setStyleSheet("color: #374151; border: none;")
+        self.layout.addWidget(self.summary)
+
+        self.preview_row = QHBoxLayout()
+        self.selected_preview = ThumbnailLabel(size=160)
+        self.best_preview = ThumbnailLabel(size=160)
+        self.preview_row.addWidget(self.selected_preview)
+        self.preview_row.addWidget(self.best_preview)
+        self.layout.addLayout(self.preview_row)
+
+        self.table = QGridLayout()
+        self.table.setHorizontalSpacing(12)
+        self.table.setVerticalSpacing(5)
+        self.layout.addLayout(self.table)
+        self._row_widgets: list[QWidget] = []
+
+    def set_comparison(self, selected: Photo | None, best: Photo | None, comparisons: list[MetricComparison]) -> None:
+        self._clear_rows()
+        self.selected_preview.show_image(selected.path if selected else None)
+        self.best_preview.show_image(best.path if best else None)
+
+        if selected is None or best is None:
+            self.summary.setText("사진을 선택하면 추천 사진과 현재 사진을 비교합니다.")
+            return
+
+        if selected is best:
+            self.summary.setText(f"현재 사진이 추천 사진입니다. 종합 {selected.metrics.overall:.1f}/10점")
+        else:
+            overall_delta = selected.metrics.overall - best.metrics.overall
+            self.summary.setText(
+                f"현재 사진 {selected.metrics.overall:.1f}점 vs 추천 사진 {best.metrics.overall:.1f}점 "
+                f"({overall_delta:+.1f})"
+            )
+
+        headers = ("지표", "현재", "추천", "차이")
+        for column, text in enumerate(headers):
+            label = QLabel(text)
+            label.setStyleSheet("font-weight: 700; color: #4b5563; border: none;")
+            self.table.addWidget(label, 0, column)
+            self._row_widgets.append(label)
+
+        ranked = sorted(comparisons, key=lambda item: abs(item.delta), reverse=True)
+        for row, comparison in enumerate(ranked[:6], start=1):
+            values = (
+                comparison.label,
+                f"{comparison.selected_score:.1f}",
+                f"{comparison.best_score:.1f}",
+                f"{comparison.delta:+.1f}",
+            )
+            for column, text in enumerate(values):
+                label = QLabel(text)
+                label.setStyleSheet(f"border: none; color: {_delta_color(comparison.delta) if column == 3 else '#111827'};")
+                self.table.addWidget(label, row, column)
+                self._row_widgets.append(label)
+
+    def _clear_rows(self) -> None:
+        for widget in self._row_widgets:
+            self.table.removeWidget(widget)
+            widget.deleteLater()
+        self._row_widgets = []
+
+
 class EmptyState(QWidget):
     def __init__(self) -> None:
         super().__init__()
@@ -134,3 +223,11 @@ def _bar_style(score: float, is_overall: bool) -> str:
         "QProgressBar { border: 1px solid #d8dde6; border-radius: 4px; background: #eef1f5; } "
         f"QProgressBar::chunk {{ background-color: {color}; border-radius: 4px; }}"
     )
+
+
+def _delta_color(delta: float) -> str:
+    if delta > 0:
+        return "#2e7d32"
+    if delta < 0:
+        return "#c62828"
+    return "#6b7280"

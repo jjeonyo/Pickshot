@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.grouping import mark_best_photos
-from app.core.recommendation import best_photo_explanation, overall_rank, recommendation_status
+from app.core.recommendation import best_photo_explanation, compare_with_best, overall_rank, recommendation_status
 from app.models.photo import Photo, PhotoGroup, QualityMetrics
 
 
@@ -64,3 +64,15 @@ def test_recommendation_status_marks_best_as_keep() -> None:
 
     assert title == "현재 사진: 보관 추천"
     assert "베스트샷" in reason
+
+
+def test_compare_with_best_returns_metric_deltas() -> None:
+    group = make_group()
+
+    comparisons = compare_with_best(group, group.photos[0])
+
+    assert comparisons[0].label == "선명도"
+    assert comparisons[0].selected_score == 3.0
+    assert comparisons[0].best_score == 9.0
+    assert comparisons[0].delta == -6.0
+    assert len(comparisons) == 8

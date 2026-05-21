@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 ShotKeeper_Result/
 .DS_Store
+Assets/.idea/
