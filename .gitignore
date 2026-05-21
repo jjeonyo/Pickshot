@@ -25,3 +25,5 @@ shotkeeper/ShotKeeper_Result/
 
 # Local/private sample photos
 shotkeeper/Assets/
+build/
+shotkeeper/build/
